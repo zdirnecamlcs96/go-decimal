@@ -1,6 +1,7 @@
 package decimal
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 )
@@ -195,6 +196,81 @@ func TestGoDecimalRoundToPrecision(t *testing.T) {
 		}
 		if roundToTen.Precision != 10 {
 			t.Errorf("roundToTen.Precision = %d, want 10", roundToTen.Precision)
+		}
+	})
+}
+
+func TestJSONRoundTrip(t *testing.T) {
+	cases := []struct {
+		name string
+		val  GoDecimal
+		text string
+	}{
+		{"1234/2", New(1234, 2), "12.34"},
+		{"-5/1", New(-5, 1), "-0.5"},
+		{"0/0", New(0, 0), "0"},
+		{"100/0", New(100, 0), "100"},
+		{"110/2", New(110, 2), "1.1"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := json.Marshal(tc.val)
+			if err != nil {
+				t.Fatalf("Marshal error: %v", err)
+			}
+			if string(got) != tc.text {
+				t.Errorf("Marshal(%v) = %s, want %s", tc.val, got, tc.text)
+			}
+
+			var fromNumber GoDecimal
+			if err := json.Unmarshal([]byte(tc.text), &fromNumber); err != nil {
+				t.Fatalf("Unmarshal(%s) error: %v", tc.text, err)
+			}
+			if fromNumber.CompareTo(tc.val) != 0 {
+				t.Errorf("Unmarshal(%s) = %v, want %v", tc.text, fromNumber, tc.val)
+			}
+
+			quoted := `"` + tc.text + `"`
+			var fromString GoDecimal
+			if err := json.Unmarshal([]byte(quoted), &fromString); err != nil {
+				t.Fatalf("Unmarshal(%s) error: %v", quoted, err)
+			}
+			if fromString.CompareTo(tc.val) != 0 {
+				t.Errorf("Unmarshal(%s) = %v, want %v", quoted, fromString, tc.val)
+			}
+		})
+	}
+
+	t.Run("null leaves value unchanged", func(t *testing.T) {
+		existing := New(42, 0)
+		if err := json.Unmarshal([]byte("null"), &existing); err != nil {
+			t.Fatalf("Unmarshal(null) error: %v", err)
+		}
+		if existing.CompareTo(New(42, 0)) != 0 {
+			t.Errorf("existing = %v, want unchanged 42/0", existing)
+		}
+	})
+
+	t.Run(`"abc" errors`, func(t *testing.T) {
+		var d GoDecimal
+		if err := json.Unmarshal([]byte(`"abc"`), &d); err == nil {
+			t.Error("Unmarshal(\"abc\") = nil error, want error")
+		}
+	})
+
+	t.Run("marshal struct field", func(t *testing.T) {
+		type wrapper struct {
+			Amount GoDecimal `json:"amount"`
+		}
+		w := wrapper{Amount: New(1234, 2)}
+		got, err := json.Marshal(w)
+		if err != nil {
+			t.Fatalf("Marshal error: %v", err)
+		}
+		want := `{"amount":12.34}`
+		if string(got) != want {
+			t.Errorf("Marshal(%v) = %s, want %s", w, got, want)
 		}
 	})
 }

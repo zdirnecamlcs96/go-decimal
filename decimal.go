@@ -1,9 +1,11 @@
 package decimal
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"strconv"
+	"strings"
 )
 
 // GoDecimal is ported from lib/src/decimal.dart.
@@ -87,6 +89,35 @@ func (d GoDecimal) Mul(other GoDecimal) GoDecimal {
 func (d GoDecimal) Div(other GoDecimal) GoDecimal {
 	newAmount := d.rational.Div(other.rational)
 	return ParseFloat(newAmount.ToValidDouble())
+}
+
+// MarshalJSON emits the value as a JSON number via ToFloat64. Shortest
+// round-trip rendering, no exponent. Ceiling: float64 — values beyond ~15
+// significant digits lose precision on the wire.
+func (d GoDecimal) MarshalJSON() ([]byte, error) {
+	return []byte(strconv.FormatFloat(d.ToFloat64(), 'f', -1, 64)), nil
+}
+
+// UnmarshalJSON accepts a JSON number (12.34) or a quoted decimal string
+// ("12.34"). null leaves d unchanged. Goes through float64; see MarshalJSON.
+func (d *GoDecimal) UnmarshalJSON(b []byte) error {
+	text := strings.TrimSpace(string(b))
+	if text == "null" {
+		return nil
+	}
+	if len(text) > 0 && text[0] == '"' {
+		unquoted, err := strconv.Unquote(text)
+		if err != nil {
+			return fmt.Errorf("go-decimal: invalid JSON decimal %q: %w", text, err)
+		}
+		text = unquoted
+	}
+	value, err := strconv.ParseFloat(text, 64)
+	if err != nil {
+		return fmt.Errorf("go-decimal: invalid JSON decimal %q: %w", text, err)
+	}
+	*d = ParseFloat(value)
+	return nil
 }
 
 // CompareTo mirrors GoDecimal.compareTo(b).

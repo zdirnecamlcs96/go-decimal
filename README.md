@@ -60,6 +60,10 @@ fmt.Println(result) // "1.005"
 | `RoundTo(precision int)` | Round to N decimal places |
 | `ToValidDouble() float64` | Convert to float64 |
 
+## JSON
+
+`GoDecimal` implements `json.Marshaler` and `json.Unmarshaler`. It marshals as a plain JSON number (e.g. `12.34`) and unmarshals either a JSON number or a quoted decimal string (`"12.34"`); `null` leaves the value unchanged. Both directions go through `float64` (`ToFloat64` / `ParseFloat`), so precision beyond ~15 significant digits is not preserved on the wire.
+
 ## Edge Cases
 
 ### Intermediate rounding with limited precision
